@@ -1,51 +1,107 @@
-from machine import UART, Pin
+from machine import Pin , UART ,freq
 
-uart = UART(0, baudrate=9600, tx=Pin(0), rx=Pin(1))
-led_pin = Pin(2,Pin.OUT)
-
-uart.write(b'\033[2J')
-uart.write(b'\033[H')
-uart.write(b'\033[?25l')
-
-uart.write(b'Welcome to The UART Exploit Class Room\r\n')
-
-SHELL = b'=> '
-uart.write(SHELL)
-
-command = []
-
-def toggle_led():
-    if led_pin.value():
-        led_pin.off()
-        return 'off'
+class Shell:
     
-    led_pin.on()
-    return 'on'
-    
-while True:
-    if uart.any():
-        ch = uart.read(1) 
-        if ch == b'\r' or ch == b'\n':
-            uart.write(b'\r\n')
-
-            cmd = ''.join(command)
+    def __init__(self,channel,_baudrate,tx_pin,rx_pin):
+        self.uart = UART(channel,baudrate=_baudrate,tx=Pin(tx_pin),rx=Pin(rx_pin))
+        self.shell=b'\r\n}> '
+        self.get=[]
+        self.commends ={
+            'clear':self.clear_screen,
+            'freq' :self.get_freq,
+            'hello' : self.hello,
+            }
+        self.moves = {
+            'A':self.history_up,
+            'B':self.history_down,
+            }
+        self.history = []
+        self.history_len = 0
+    def hello(self):
+        self.uart.write(b'hello i am cp21o2\r\n')
+    def get_freq(self):
+        freq_data = str(freq())
+        self.uart.write(freq_data.encode())
+    def set_history(self,data):
+        self.history.append(data)
+        self.history_len = len(self.history)
+    def history_up(self):
+        
+        if len(self.history) < 0:
+            return
+        
+        if len(self.history) > self.history_len:
+            return
+        self.uart.write(self.history[-self.history_len])
+        self.history_len-=1
             
-            if cmd == 'led':
-                value = toggle_led()
-                uart.write(b'led is '+value+'\r\n')
-            else:
-                uart.write(b'commend not found !!\r\n')
-
-            command = []
-            uart.write(SHELL)
-        elif ch == b'\x08' or ch == b'\x7f':
-            if len(command) > 0:
-                command.pop()
-                uart.write(b'\b \b')
+    
+    def history_down(self):
+        if len(self.history) < 0:
+            return
+        
+        if len(self.history) > self.history_len:
+            return
+        print('yes iam call')
+        self.uart.write(self.history[self.history_len])
+        self.history_len+=1
+    def clear_screen(self):
+        self.uart.write(b'\033[2J\033[H')
+    
+    def get_shell(self):
+        self.uart.write(self.shell)
+        
+    def welcome_message(self):
+        self.uart.write(b'Welcome to the cp21o2 mini Shell')
+    def back_space(self):
+        self.uart.write(b'\b \b')
+    def err(self,internal=True):
+        if internal:
+            self.uart.write('commend not found !!')
         else:
-            try:
-                char = ch.decode()
-                command.append(char)
-                uart.write(ch)
-            except:
-                pass
+            self.uart.write('somewent is wrong')
+        
+    def control(self,u,debug):
+        while self.uart.any():
+            ch = self.uart.read(1)
+            
+            if ch == b'\r':
+                commend = ''.join(self.get)
+                if commend in self.commends:
+                    self.commends[commend]()
+                else:
+                    self.err()
+                
+                self.get = []
+                self.get_shell()
+                self.set_history(commend)
+                
+            elif ch  in (b'\x08' , b'\x7f'):
+                print(self.get)
+                if len(self.get) > 0:
+                    self.get.pop()
+                self.back_space()
+              
+            elif ch in (b'\x1b'):
+                move = self.uart.read(2).decode()[1]
+                
+                if move in self.moves:
+                    self.moves[move]()
+                
+            else:
+                ch_decode=ch.decode()
+                self.get.append(ch_decode)
+                self.uart.write(ch)
+            
+            if debug:
+                print('Decode Message ' ,ch.decode(),'Byte format',ch)
+
+    def run(self,debug):
+        self.clear_screen()
+        self.welcome_message()
+        self.get_shell()
+        self.uart.irq(handler=lambda u:self.control(u,debug),trigger=UART.IRQ_RXIDLE)
+        
+        
+if __name__ =='__main__':
+    Shell(0,9600,0,1).run(debug=True)
