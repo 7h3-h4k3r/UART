@@ -24,32 +24,42 @@ class Shell:
         self.uart.write(freq_data.encode())
     def set_history(self,data):
         self.history.append(data)
-        self.history_len = len(self.history)
+        self.history_len +=1
     def history_up(self):
-        
-        if len(self.history) < 0:
+        print(self.history)
+        if len(self.history) <= 0:
             return
         
-        if len(self.history) > self.history_len:
-            return
-        self.uart.write(self.history[-self.history_len])
-        self.history_len-=1
+        if self.history_len <= 0:
+            self.history_len = len(self.history)
+        
+        self.history_len -=1
+        cmd = self.history[self.history_len]
+
+        self.get_shell(True)
+        self.uart.write(cmd.encode())
+        
+        self.get = list(cmd)
             
     
     def history_down(self):
-        if len(self.history) < 0:
+        if len(self.history) <= 0:
             return
         
-        if len(self.history) > self.history_len:
+        if self.history_len >= len(self.history):
             return
-        print('yes iam call')
+        
+        self.get_shell(True)
         self.uart.write(self.history[self.history_len])
         self.history_len+=1
     def clear_screen(self):
         self.uart.write(b'\033[2J\033[H')
     
-    def get_shell(self):
-        self.uart.write(self.shell)
+    def get_shell(self,current_line=False):
+        if current_line:
+            self.uart.write(b'\r\033[2K}> ' )
+        else:
+            self.uart.write(self.shell)
         
     def welcome_message(self):
         self.uart.write(b'Welcome to the cp21o2 mini Shell')
@@ -57,7 +67,7 @@ class Shell:
         self.uart.write(b'\b \b')
     def err(self,internal=True):
         if internal:
-            self.uart.write('commend not found !!')
+            self.uart.write('\r\ncommend not found !!')
         else:
             self.uart.write('somewent is wrong')
         
@@ -74,7 +84,9 @@ class Shell:
                 
                 self.get = []
                 self.get_shell()
-                self.set_history(commend)
+                if len(commend) != 0:
+                    self.set_history(commend)
+                print(self.history)
                 
             elif ch  in (b'\x08' , b'\x7f'):
                 print(self.get)
